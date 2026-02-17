@@ -1,0 +1,33 @@
+services:
+  catalogservice:
+    build:
+      context: .
+      dockerfile: src/CatalogService/Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+  paymentservice:
+    build:
+      context: .
+      dockerfile: src/PaymentService/Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+  orderservice:
+    build:
+      context: .
+      dockerfile: src/OrderService/Dockerfile
+    ports:
+      - "8083:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      CatalogService__BaseUrl: http://catalogservice:8080/
+      PaymentService__BaseUrl: http://paymentservice:8080/
+    depends_on:
+      - catalogservice
+      - paymentservice
+
