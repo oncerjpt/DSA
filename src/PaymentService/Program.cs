@@ -27,7 +27,16 @@ app.MapPost("/payments", (HttpRequest httpRequest, PaymentRequest request, Payme
         }
 
         var now = DateTimeOffset.UtcNow;
-        var (payment, created) = store.GetOrCreate(keyValues.ToString(), request, now);
+        Payment payment;
+        bool created;
+        try
+        {
+            (payment, created) = store.GetOrCreate(keyValues.ToString(), request, now);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
 
         return created
             ? Results.Created($"/payments/{payment.Id}", payment)

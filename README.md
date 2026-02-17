@@ -18,3 +18,6 @@ Services:
 * CatalogService: http://localhost:8081 (OpenAPI: `/openapi/v1.json`, Health: `/health`)
 * PaymentService: http://localhost:8082 (OpenAPI: `/openapi/v1.json`, Health: `/health`)
 * OrderService: http://localhost:8083 (OpenAPI: `/openapi/v1.json`, Health: `/health`)
+
+Notes:
+* `POST /orders` and `POST /payments` require an `Idempotency-Key` header.

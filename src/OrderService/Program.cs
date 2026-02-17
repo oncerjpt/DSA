@@ -47,6 +47,24 @@ app.MapPost("/orders", async (
             return Results.BadRequest(new { error = "At least one itemId is required." });
         }
 
+        if (!httpRequest.Headers.TryGetValue("Idempotency-Key", out var keyValues) ||
+            string.IsNullOrWhiteSpace(keyValues.ToString()))
+        {
+            return Results.BadRequest(new { error = "Missing Idempotency-Key header." });
+        }
+
+        var idempotencyKey = keyValues.ToString();
+        var requestHash = string.Join(",", request.ItemIds.OrderBy(i => i).Select(i => i.ToString("N")));
+        if (store.TryGetByIdempotencyKey(idempotencyKey, requestHash, out var existingOrder, out var conflict))
+        {
+            return Results.Ok(existingOrder);
+        }
+
+        if (conflict)
+        {
+            return Results.Problem("Idempotency-Key has already been used with a different request.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         var lines = new List<OrderLine>(request.ItemIds.Count);
         foreach (var itemId in request.ItemIds)
         {
@@ -62,11 +80,6 @@ app.MapPost("/orders", async (
         var total = lines.Sum(l => l.UnitPrice);
         var orderId = Guid.NewGuid();
 
-        var idempotencyKey = httpRequest.Headers.TryGetValue("Idempotency-Key", out var keyValues) &&
-                             !string.IsNullOrWhiteSpace(keyValues.ToString())
-            ? keyValues.ToString()
-            : $"order-{orderId}";
-
         Payment payment;
         try
         {
@@ -77,6 +90,7 @@ app.MapPost("/orders", async (
             logger.LogError(ex, "Payment authorization failed for order {OrderId}", orderId);
             var failed = new Order(orderId, lines, total, null, OrderStatus.Failed, DateTimeOffset.UtcNow);
             store.Upsert(failed);
+            store.SetIdempotencyKey(idempotencyKey, requestHash, orderId);
             return Results.Problem("Payment authorization failed.", statusCode: StatusCodes.Status502BadGateway);
         }
 
@@ -90,6 +104,7 @@ app.MapPost("/orders", async (
             DateTimeOffset.UtcNow);
 
         store.Upsert(order);
+        store.SetIdempotencyKey(idempotencyKey, requestHash, orderId);
         return Results.Created($"/orders/{order.Id}", order);
     })
     .WithName("CreateOrder");
